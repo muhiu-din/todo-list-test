@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Firebase local/debug files
+firebase-debug.log
+firestore-debug.log

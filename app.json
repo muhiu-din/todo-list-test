@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Daymark",
+    "slug": "daymark-mobile",
+    "version": "1.0.0",
+    "orientation": "default",
+    "scheme": "daymark",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "plugins": [
+      "expo-asset",
+      "expo-font",
+      "expo-notifications",
+      "expo-router",
+      "expo-web-browser"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "39030b41-fe3f-49b7-b279-92096b3a1dea"
+      }
+    },
+    "android": {
+      "package": "com.muhiudin.daymarkmobile",
+      "versionCode": 1
+    }
+  }
+}

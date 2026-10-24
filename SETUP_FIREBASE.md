@@ -92,3 +92,14 @@ npx expo start -c
 ```
 
 The auth screen should now allow account creation and login. Phase 2 will stop here so the Firebase setup can be completed and tested before Firestore data features are added.
+
+## 8. Deploy the current Firestore rules
+
+After Firebase CLI authentication, deploy the repository rules and indexes before creating teams:
+
+```powershell
+npx firebase login
+npx firebase deploy --only firestore:rules,firestore:indexes --project YOUR_FIREBASE_PROJECT_ID
+```
+
+Replace `YOUR_FIREBASE_PROJECT_ID` with the value of `EXPO_PUBLIC_FIREBASE_PROJECT_ID` in `.env`. The local emulator tests passing does not automatically update the remote Firebase project.

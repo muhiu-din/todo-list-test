@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import * as path from 'node:path';
 import { beforeAll, afterAll, describe, it } from 'vitest';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { arrayRemove, deleteDoc, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 
 let testEnvironment: RulesTestEnvironment;
@@ -14,7 +14,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await testEnvironment.cleanup();
+  if (testEnvironment) await testEnvironment.cleanup();
 });
 
 describe('Daymark Firestore rules', () => {
@@ -55,4 +55,36 @@ describe('Daymark Firestore rules', () => {
   it('blocks a user from reading another user personal list', async () => {
     await assertFails(getDoc(doc(testEnvironment.authenticatedContext('outsider').firestore(), 'users/member/lists/personal')));
   });
+
+  it('allows an authenticated owner to create the team, owner member, and invite', async () => {
+    const database = testEnvironment.authenticatedContext('new-owner').firestore();
+    await assertSucceeds(setDoc(doc(database, 'teams/team-created'), { name: 'Created Team', ownerId: 'new-owner', inviteCode: 'NEW123', memberIds: ['new-owner'] }));
+    await assertSucceeds(setDoc(doc(database, 'teams/team-created/members/new-owner'), { uid: 'new-owner', role: 'owner', joinedWithCode: '' }));
+    await assertSucceeds(setDoc(doc(database, 'invites/NEW123'), { code: 'NEW123', teamId: 'team-created', createdBy: 'new-owner', active: true }));
+  });
+
+  it('allows a team member to leave by deleting member doc and removing themselves from memberIds', async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const database = context.firestore();
+      await setDoc(doc(database, 'teams/team-leave'), { name: 'Leave Team', ownerId: 'owner-leave', inviteCode: 'LEV123', memberIds: ['owner-leave', 'leaving-member'] });
+      await setDoc(doc(database, 'teams/team-leave/members/leaving-member'), { uid: 'leaving-member', role: 'member', joinedWithCode: 'LEV123' });
+    });
+
+    const leavingMemberDb = testEnvironment.authenticatedContext('leaving-member').firestore();
+    await assertSucceeds(deleteDoc(doc(leavingMemberDb, 'teams/team-leave/members/leaving-member')));
+    await assertSucceeds(updateDoc(doc(leavingMemberDb, 'teams/team-leave'), { memberIds: arrayRemove('leaving-member') }));
+  });
+
+  it('allows an owner to delete an invite when deleting the team', async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const database = context.firestore();
+      await setDoc(doc(database, 'teams/team-del'), { name: 'Delete Team', ownerId: 'owner-del', inviteCode: 'DEL123', memberIds: ['owner-del'] });
+      await setDoc(doc(database, 'invites/DEL123'), { code: 'DEL123', teamId: 'team-del', createdBy: 'owner-del', active: true });
+    });
+
+    const ownerDb = testEnvironment.authenticatedContext('owner-del').firestore();
+    await assertSucceeds(deleteDoc(doc(ownerDb, 'invites/DEL123')));
+    await assertSucceeds(deleteDoc(doc(ownerDb, 'teams/team-del')));
+  });
 });
+

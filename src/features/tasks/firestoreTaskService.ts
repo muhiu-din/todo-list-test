@@ -3,7 +3,8 @@ import { getFirebaseDb } from '@/src/services/firebase/client';
 import type { FirestoreTask } from './firestoreTypes';
 
 export function listenToTasks(path: string, callback: (tasks: Array<FirestoreTask & { id: string }>) => void, onError: (error: Error) => void): Unsubscribe {
-  return onSnapshot(query(collection(getFirebaseDb(), path), orderBy('updatedAt', 'desc')), (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as FirestoreTask & { id: string }))), onError);
+  // Use createdAt so docs without updatedAt (legacy) are still included
+  return onSnapshot(query(collection(getFirebaseDb(), path), orderBy('createdAt', 'desc')), (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as FirestoreTask & { id: string }))), onError);
 }
 
 export async function createTask(path: string, task: Omit<FirestoreTask, 'createdAt' | 'updatedAt'>): Promise<string> {

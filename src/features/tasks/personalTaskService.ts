@@ -15,7 +15,8 @@ export async function ensurePersonalList(uid: string): Promise<string> {
 
 export function listenToPersonalTasks(uid: string, listId: string, callback: (tasks: RemoteTask[]) => void, onError: (error: Error) => void): Unsubscribe {
   const taskCollection = collection(getFirebaseDb(), 'users', uid, 'lists', listId, 'tasks');
-  return onSnapshot(query(taskCollection, orderBy('updatedAt', 'desc')), (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as RemoteTask))), onError);
+  // Use createdAt so docs without updatedAt (legacy) are still included
+  return onSnapshot(query(taskCollection, orderBy('createdAt', 'desc')), (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as RemoteTask))), onError);
 }
 
 export async function createPersonalTask(uid: string, listId: string, task: Omit<FirestoreTask, 'createdAt' | 'updatedAt'>): Promise<string> {

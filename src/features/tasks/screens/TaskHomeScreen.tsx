@@ -27,6 +27,7 @@ export function TaskHomeScreen() {
   const [migrationTasks, setMigrationTasks] = useState<Task[]>([]);
   const localTasksRef = useRef<Task[]>([]);
   const migrationShownRef = useRef(false);
+  const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     loadLocalTasks().then((loadedTasks) => { localTasksRef.current = loadedTasks; setTasks(loadedTasks); }).catch(() => setTasks([])).finally(() => setReady(true));
@@ -63,6 +64,13 @@ export function TaskHomeScreen() {
   const openCount = tasks.length - completedCount;
   const completion = tasks.length ? Math.round((completedCount / tasks.length) * 100) : 0;
 
+  function cancelEdit() {
+    setEditingId(null);
+    setTaskText('');
+    setNotes('');
+    setReminderAt(null);
+  }
+
   async function submitTask() {
     const title = taskText.trim();
     if (!title) return;
@@ -81,19 +89,28 @@ export function TaskHomeScreen() {
     };
 
     setTasks((current) => existing ? current.map((task) => task.id === existing.id ? nextTask : task) : [nextTask, ...current]);
-    if (user && personalListId) {
-      const remoteTask = toFirestoreTask(nextTask, user.uid);
-      if (existing) await updatePersonalTask(user.uid, personalListId, existing.id, remoteTask);
-      else await createPersonalTask(user.uid, personalListId, remoteTask);
+    cancelEdit();
+
+    try {
+      if (user && personalListId) {
+        const remoteTask = toFirestoreTask(nextTask, user.uid);
+        if (existing) {
+          try {
+            await updatePersonalTask(user.uid, personalListId, existing.id, remoteTask);
+          } catch {
+            await createPersonalTask(user.uid, personalListId, remoteTask);
+          }
+        } else {
+          await createPersonalTask(user.uid, personalListId, remoteTask);
+        }
+      }
+      if (nextTask.reminderAt && new Date(nextTask.reminderAt) > new Date()) {
+        const notificationId = await scheduleTaskReminder(nextTask.title, new Date(nextTask.reminderAt), nextTask.notes);
+        setTasks((current) => current.map((task) => task.id === nextTask.id ? { ...task, notificationId } : task));
+      }
+    } catch (error) {
+      console.warn('Failed to persist task:', error);
     }
-    if (nextTask.reminderAt && new Date(nextTask.reminderAt) > new Date()) {
-      const notificationId = await scheduleTaskReminder(nextTask.title, new Date(nextTask.reminderAt));
-      setTasks((current) => current.map((task) => task.id === nextTask.id ? { ...task, notificationId } : task));
-    }
-    setTaskText('');
-    setNotes('');
-    setEditingId(null);
-    setReminderAt(null);
   }
 
   function editTask(task: Task) {
@@ -101,6 +118,7 @@ export function TaskHomeScreen() {
     setTaskText(task.title);
     setNotes(task.notes ?? '');
     setReminderAt(task.reminderAt);
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
   }
 
   async function toggleTask(task: Task) {
@@ -108,7 +126,7 @@ export function TaskHomeScreen() {
     const nextCompleted = !task.completed;
     let notificationId: string | null = null;
     if (!nextCompleted && task.reminderAt && new Date(task.reminderAt) > new Date()) {
-      notificationId = await scheduleTaskReminder(task.title, new Date(task.reminderAt));
+      notificationId = await scheduleTaskReminder(task.title, new Date(task.reminderAt), task.notes);
     }
     setTasks((current) => current.map((item) => item.id === task.id ? { ...item, completed: nextCompleted, notificationId } : item));
     if (user && personalListId) await updatePersonalTask(user.uid, personalListId, task.id, { completed: nextCompleted, completedBy: nextCompleted ? user.uid : null, completedAt: nextCompleted ? Timestamp.now() : null });
@@ -116,6 +134,7 @@ export function TaskHomeScreen() {
 
   async function deleteTask(task: Task) {
     await cancelTaskReminder(task.notificationId);
+    if (editingId === task.id) cancelEdit();
     setTasks((current) => current.filter((item) => item.id !== task.id));
     if (user && personalListId) await deletePersonalTask(user.uid, personalListId, task.id);
   }
@@ -130,7 +149,7 @@ export function TaskHomeScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.paper} />
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={styles.topbar}>
           <View style={styles.brandRow}><View style={styles.brandMark}><Text style={styles.brandMarkText}>*</Text></View><Text style={styles.brand}>daymark</Text></View>
           <Text style={styles.dateText}>{new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase()}</Text>
@@ -142,7 +161,17 @@ export function TaskHomeScreen() {
         </View>
 
         <View style={styles.workspace}>
-          <TaskComposer value={taskText} notes={notes} isEditing={Boolean(editingId)} reminderAt={reminderAt} onChangeText={setTaskText} onChangeNotes={setNotes} onReminderChange={setReminderAt} onSubmit={submitTask} />
+          <TaskComposer
+            value={taskText}
+            notes={notes}
+            isEditing={Boolean(editingId)}
+            reminderAt={reminderAt}
+            onChangeText={setTaskText}
+            onChangeNotes={setNotes}
+            onReminderChange={setReminderAt}
+            onSubmit={submitTask}
+            onCancel={cancelEdit}
+          />
           <TextInput accessibilityLabel="Search tasks" value={search} onChangeText={setSearch} placeholder="Search your tasks" placeholderTextColor="#9BA6A1" style={styles.searchInput} />
           {showMigration && <View style={styles.migrationCard}><Text style={styles.migrationTitle}>Import your local tasks?</Text><Text style={styles.migrationCopy}>{migrationTasks.length} task{migrationTasks.length === 1 ? '' : 's'} found on this device.</Text><View style={styles.migrationActions}><Pressable onPress={importLegacyTasks} style={styles.importButton}><Text style={styles.importText}>Import</Text></Pressable><Pressable onPress={() => { setShowMigration(false); setMigrationTasks([]); }} style={styles.skipButton}><Text style={styles.skipText}>Skip</Text></Pressable></View></View>}
           <View style={styles.listHeader}>
@@ -150,13 +179,23 @@ export function TaskHomeScreen() {
             <View style={styles.filters}>{(['all', 'active', 'completed'] as TaskFilter[]).map((item) => <Pressable accessibilityLabel={`Show ${item} tasks`} key={item} onPress={() => setFilter(item)} style={[styles.filterButton, filter === item && styles.filterButtonActive]}><Text style={[styles.filterText, filter === item && styles.filterTextActive]}>{item === 'active' ? 'Open' : item === 'completed' ? 'Done' : 'All'}</Text></Pressable>)}</View>
           </View>
 
-          {ready && visibleTasks.length > 0 ? visibleTasks.map((task) => <TaskRow key={task.id} task={task} onToggle={toggleTask} onEdit={editTask} onDelete={deleteTask} />) : <View style={styles.emptyState}><View style={styles.emptyIcon}><Text style={styles.emptyIconText}>+</Text></View><Text style={styles.emptyTitle}>{ready ? 'Nothing here yet' : 'Loading your list'}</Text><Text style={styles.emptyCopy}>{ready ? 'Add a task above and give your day a little shape.' : 'Getting your local tasks ready.'}</Text></View>}
+          {ready && visibleTasks.length > 0 ? visibleTasks.map((task) => (
+            <TaskRow
+              key={task.id}
+              task={task}
+              isEditing={editingId === task.id}
+              onToggle={toggleTask}
+              onEdit={editTask}
+              onDelete={deleteTask}
+            />
+          )) : <View style={styles.emptyState}><View style={styles.emptyIcon}><Text style={styles.emptyIconText}>+</Text></View><Text style={styles.emptyTitle}>{ready ? 'Nothing here yet' : 'Loading your list'}</Text><Text style={styles.emptyCopy}>{ready ? 'Add a task above and give your day a little shape.' : 'Getting your local tasks ready.'}</Text></View>}
         </View>
 
         <View style={styles.footer}><Text style={styles.footerText}>DAYMARK / 01</Text><Text style={styles.footerText}>BUILT FOR THE EVERYDAY</Text></View>
       </ScrollView>
     </SafeAreaView>
   );
+
 }
 
 function toLocalTask(task: RemoteTask): Task {

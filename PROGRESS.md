@@ -1,6 +1,6 @@
 # Daymark Progress
 
-## Current phase: Phase 5 - Teams and real-time collaboration
+## Current phase: Phase 9 - Delivery verification
 
 ### Done
 
@@ -48,21 +48,34 @@
 - Revalidated Phase 4 with `npm run typecheck` and `npx expo export --platform web`.
 - Replaced the Teams placeholder with team creation, invite-code join, team selection, member listeners, invite sharing, and leave-team controls.
 - Added invite-document creation and invite regeneration/service support.
+- Added shared-list creation and real-time shared-list listeners inside selected teams.
+- Added shared task add, edit, complete, delete, and real-time snapshot flows inside selected team lists.
+- Added owner controls to remove members and regenerate invite codes.
+- Added owner delete-team action and member leave flow in the Teams UI.
+- Added independent Create/Join/List loading states so one action no longer blocks the others.
+- Fixed member joining by allowing a joining user to add only their own UID to `memberIds`.
+- Added shared-task reminder scheduling/reconciliation and Personal quick-add from the Teams tab.
+- Deployed updated Firestore rules and indexes to the `daymark-team` Firebase project.
+- Added `README.md`, `BUILD_APK.md`, `RELEASE.md`, `QA_REPORT.md`, and `MANUAL_TEST_CHECKLIST.md`.
+- Added standalone task utility tests and separated emulator-only rules tests from `npm test`.
+- Added authenticated offline banner support.
+- Final unit tests pass: 2 task tests.
+- Final rules tests pass: 5 emulator tests.
 - Validated the Teams slice with `npm run typecheck`, Expo web export, and four passing Firestore rules tests.
+- Final validation: `npm test` passed 2 tests, `npm run test:rules` passed 5 tests, TypeScript passed, and Expo web export passed.
 
 ### Next
 
-- Add Google OAuth client IDs to `.env` if Google sign-in is required on native builds, then implement Personal Firestore tasks and local-task migration in Phase 4.
+- Build the Android APK with the preview EAS profile and complete the two-device manual checklist.
 
 ### Known issues
 
-- The new Router shell currently has placeholder Teams and Settings screens.
-- The app is not yet a team app and does not yet contain Firebase/Auth/Firestore.
-- Firebase/Auth/Firestore do not exist yet.
-- Automated tests and Firestore emulator tests do not exist yet.
-- Real native reminder behavior must be validated in an Android build, not only the web export.
-- The current `App.js` stores local task notification IDs, but the future shared reminder reconciler will need a separate persisted map.
-- Google sign-in requires `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` and `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` in `.env`; Firebase provider enablement alone is not enough for Expo OAuth.
+- Real native reminder timing and Google Android OAuth still require APK/device testing.
+- Full offline write queue/reconciliation is not implemented; the app currently shows an offline banner.
+- Due dates and assignees are not yet exposed in the task UI.
+- Notification-tap navigation to a specific task is not yet implemented.
+- Team deletion removes the team document and invite; nested list/task cleanup should be handled before production-scale use.
+- `firestore-debug.log` is a local emulator artifact and should not be committed.
 
 ## Phase summaries
 
@@ -88,20 +101,20 @@ Completed for the current Personal scope. Personal Firestore list/task synchroni
 
 ### Phase 5
 
-In progress. Team creation, invite joining, member listeners, invite sharing, and leaving are implemented. Shared team lists/tasks, owner member removal/regeneration, and full two-device manual sync remain.
+Completed in code. Team creation, invite joining, member listeners, invite sharing, leaving, shared-list creation/listeners, shared task CRUD/sync, owner removal/regeneration controls, and offline status are implemented. Two-device manual validation remains.
 
 ### Phase 6
 
-Not started.
+Partially implemented through local reminder reconciliation. Notification-tap routing and native Android verification remain.
 
 ### Phase 7
 
-Not started.
+Offline banner and general accessibility labels are implemented. Full queued-write handling, dark theme, splash/icon polish, and animation audit remain.
 
 ### Phase 8
 
-Not started.
+Automated unit/rules coverage and QA artifacts are present. Two-device and native APK manual checks remain.
 
 ### Phase 9
 
-Not started.
+README, Firebase setup, APK build, release, QA, and manual checklist docs are complete. APK build and native-device manual verification remain.

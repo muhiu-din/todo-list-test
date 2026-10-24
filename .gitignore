@@ -4,6 +4,8 @@ node_modules/
 # Expo
 .expo/
 dist/
+.firebase/
+firestore-debug.log
 
 # Environment variables
 .env

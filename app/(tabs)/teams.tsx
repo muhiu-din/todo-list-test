@@ -1,9 +1,30 @@
 import { useEffect, useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Alert,
+  Platform,
+  Pressable,
+  ScrollView,
+  Share,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Timestamp } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/src/features/auth/AuthProvider';
-import { createTeam, deleteTeam, joinTeamByCode, leaveTeam, listenToTeamMembers, listenToUserTeams, regenerateInvite, removeMember } from '@/src/features/teams/teamService';
+import {
+  createTeam,
+  deleteTeam,
+  joinTeamByCode,
+  leaveTeam,
+  listenToTeamMembers,
+  listenToUserTeams,
+  regenerateInvite,
+  removeMember,
+} from '@/src/features/teams/teamService';
 import { createList, listenToLists } from '@/src/features/lists/listService';
 import type { TaskList } from '@/src/features/lists/types';
 import type { Team, TeamMember } from '@/src/features/teams/types';
@@ -12,10 +33,15 @@ import { TaskRow } from '@/src/features/tasks/components/TaskRow';
 import { createTask, deleteTask, listenToTasks, updateTask } from '@/src/features/tasks/firestoreTaskService';
 import type { Task } from '@/src/features/tasks/types';
 import { reconcileTaskReminders } from '@/src/services/reminderReconciler';
-import { colors, radii, spacing, typography } from '@/src/theme/tokens';
+import { radii, spacing, typography } from '@/src/theme/tokens';
+import { useTheme } from '@/src/theme/ThemeContext';
 
 export default function TeamsScreen() {
   const { user } = useAuth();
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) : 0) + 14;
+
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -45,11 +71,16 @@ export default function TeamsScreen() {
   useEffect(() => {
     if (!selectedTeam || !selectedList) return undefined;
     const path = `teams/${selectedTeam.id}/lists/${selectedList.id}/tasks`;
-    return listenToTasks(path, (remoteTasks) => {
-      const nextTasks = remoteTasks.map(toLocalTask);
-      setSharedTasks(nextTasks);
-      reconcileTaskReminders(nextTasks).catch(() => undefined);
-    }, (error) => setMessage(error.message));
+    const scope = `team:${selectedTeam.id}:${selectedList.id}`;
+    return listenToTasks(
+      path,
+      (remoteTasks) => {
+        const nextTasks = remoteTasks.map(toLocalTask);
+        setSharedTasks(nextTasks);
+        reconcileTaskReminders(nextTasks, scope, selectedTeam.name).catch(() => undefined);
+      },
+      (error) => setMessage(error.message)
+    );
   }, [selectedList, selectedTeam]);
 
   useEffect(() => {
@@ -213,7 +244,7 @@ export default function TeamsScreen() {
           dueAt: null,
           reminderAt,
         });
-        setMessage('Task added.');
+        setMessage('Task added. Team members will receive reminders on their devices.');
       }
       cancelSharedEdit();
     } catch (error) {
@@ -245,54 +276,106 @@ export default function TeamsScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.eyebrow}>COLLABORATION</Text>
-      <Text style={styles.title}>Teams</Text>
-      <Text style={styles.subtitle}>Share a list, keep the rhythm together.</Text>
+    <ScrollView
+      contentContainerStyle={[styles.container, { backgroundColor: colors.paper, paddingTop: topInset }]}
+      showsVerticalScrollIndicator={false}
+    >
+      <Text style={[styles.eyebrow, { color: colors.coral }]}>COLLABORATION</Text>
+      <Text style={[styles.title, { color: colors.ink }]}>Teams</Text>
+      <Text style={[styles.subtitle, { color: colors.muted }]}>
+        Share a list, keep the rhythm together. Reminders ring for all members.
+      </Text>
 
-      <View style={styles.formCard}>
-        <Text style={styles.cardTitle}>Create a team</Text>
+      <View style={[styles.formCard, { borderColor: colors.line, backgroundColor: colors.card }]}>
+        <Text style={[styles.cardTitle, { color: colors.ink }]}>Create a team</Text>
         <View style={styles.formRow}>
-          <TextInput accessibilityLabel="Team name" value={teamName} onChangeText={setTeamName} placeholder="Team name" placeholderTextColor="#9BA6A1" style={styles.input} />
-          <Pressable accessibilityLabel="Create team" onPress={handleCreate} disabled={busyAction !== null} style={[styles.primaryButton, busyAction === 'create' && styles.disabledButton]}>
-            <Text style={styles.primaryText}>{busyAction === 'create' ? 'Creating...' : 'Create'}</Text>
+          <TextInput
+            accessibilityLabel="Team name"
+            value={teamName}
+            onChangeText={setTeamName}
+            placeholder="Team name"
+            placeholderTextColor={colors.muted}
+            style={[styles.input, { borderColor: colors.line, color: colors.ink, backgroundColor: colors.paper }]}
+          />
+          <Pressable
+            accessibilityLabel="Create team"
+            onPress={handleCreate}
+            disabled={busyAction !== null}
+            style={[styles.primaryButton, { backgroundColor: colors.ink }, busyAction === 'create' && styles.disabledButton]}
+          >
+            <Text style={[styles.primaryText, { color: colors.card }]}>{busyAction === 'create' ? 'Creating...' : 'Create'}</Text>
           </Pressable>
         </View>
       </View>
 
-      <View style={styles.formCard}>
-        <Text style={styles.cardTitle}>Join with a code</Text>
+      <View style={[styles.formCard, { borderColor: colors.line, backgroundColor: colors.card }]}>
+        <Text style={[styles.cardTitle, { color: colors.ink }]}>Join with a code</Text>
         <View style={styles.formRow}>
-          <TextInput accessibilityLabel="Invite code" value={inviteCode} onChangeText={(value) => setInviteCode(value.toUpperCase())} placeholder="ABC123" placeholderTextColor="#9BA6A1" autoCapitalize="characters" maxLength={6} style={styles.input} />
-          <Pressable accessibilityLabel="Join team" onPress={handleJoin} disabled={busyAction !== null} style={[styles.primaryButton, busyAction === 'join' && styles.disabledButton]}>
-            <Text style={styles.primaryText}>{busyAction === 'join' ? 'Joining...' : 'Join'}</Text>
+          <TextInput
+            accessibilityLabel="Invite code"
+            value={inviteCode}
+            onChangeText={(value) => setInviteCode(value.toUpperCase())}
+            placeholder="ABC123"
+            placeholderTextColor={colors.muted}
+            autoCapitalize="characters"
+            maxLength={6}
+            style={[styles.input, { borderColor: colors.line, color: colors.ink, backgroundColor: colors.paper }]}
+          />
+          <Pressable
+            accessibilityLabel="Join team"
+            onPress={handleJoin}
+            disabled={busyAction !== null}
+            style={[styles.primaryButton, { backgroundColor: colors.ink }, busyAction === 'join' && styles.disabledButton]}
+          >
+            <Text style={[styles.primaryText, { color: colors.card }]}>{busyAction === 'join' ? 'Joining...' : 'Join'}</Text>
           </Pressable>
         </View>
       </View>
 
-      {message ? <Text style={styles.message}>{message}</Text> : null}
+      {message ? <Text style={[styles.message, { color: colors.muted }]}>{message}</Text> : null}
 
       {selectedTeam?.ownerId === user?.uid && (
-        <Pressable accessibilityLabel="Delete team" onPress={handleDeleteTeam} disabled={busyAction === 'delete'} style={[styles.deleteTeamButton, busyAction === 'delete' && styles.disabledButton]}>
+        <Pressable
+          accessibilityLabel="Delete team"
+          onPress={handleDeleteTeam}
+          disabled={busyAction === 'delete'}
+          style={[styles.deleteTeamButton, { borderColor: colors.line, backgroundColor: colors.dangerBg }, busyAction === 'delete' && styles.disabledButton]}
+        >
           <Ionicons name="trash-outline" size={17} color={colors.danger} />
-          <Text style={styles.deleteTeamText}>{busyAction === 'delete' ? 'Deleting team...' : 'Delete selected team'}</Text>
+          <Text style={[styles.deleteTeamText, { color: colors.danger }]}>
+            {busyAction === 'delete' ? 'Deleting team...' : 'Delete selected team'}
+          </Text>
         </Pressable>
       )}
 
-      <Text style={styles.sectionLabel}>YOUR TEAMS</Text>
+      <Text style={[styles.sectionLabel, { color: colors.muted }]}>YOUR TEAMS</Text>
       {teams.length === 0 ? (
-        <View style={styles.empty}>
+        <View style={[styles.empty, { borderColor: colors.line, backgroundColor: colors.card }]}>
           <Ionicons name="people-outline" size={26} color={colors.muted} />
-          <Text style={styles.emptyTitle}>No teams yet</Text>
-          <Text style={styles.emptyCopy}>Create one above or join with an invite code.</Text>
+          <Text style={[styles.emptyTitle, { color: colors.ink }]}>No teams yet</Text>
+          <Text style={[styles.emptyCopy, { color: colors.muted }]}>Create one above or join with an invite code.</Text>
         </View>
       ) : (
         teams.map((team) => (
-          <Pressable key={team.id} onPress={() => { setSelectedTeam(team); setSelectedList(null); cancelSharedEdit(); }} style={[styles.teamCard, selectedTeam?.id === team.id && styles.teamCardSelected]}>
-            <View style={styles.teamIcon}><Ionicons name="people" size={19} color={colors.coral} /></View>
+          <Pressable
+            key={team.id}
+            onPress={() => {
+              setSelectedTeam(team);
+              setSelectedList(null);
+              cancelSharedEdit();
+            }}
+            style={[
+              styles.teamCard,
+              { borderColor: colors.line, backgroundColor: colors.card },
+              selectedTeam?.id === team.id && [styles.teamCardSelected, { borderColor: colors.coral }],
+            ]}
+          >
+            <View style={[styles.teamIcon, { backgroundColor: colors.coralMuted }]}>
+              <Ionicons name="people" size={19} color={colors.coral} />
+            </View>
             <View style={styles.teamCopy}>
-              <Text style={styles.teamName}>{team.name}</Text>
-              <Text style={styles.teamMeta}>Invite code · {team.inviteCode}</Text>
+              <Text style={[styles.teamName, { color: colors.ink }]}>{team.name}</Text>
+              <Text style={[styles.teamMeta, { color: colors.muted }]}>Invite code · {team.inviteCode}</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.muted} />
           </Pressable>
@@ -300,68 +383,106 @@ export default function TeamsScreen() {
       )}
 
       {selectedTeam && (
-        <View style={styles.detailCard}>
+        <View style={[styles.detailCard, { borderColor: colors.line, backgroundColor: colors.card }]}>
           <View style={styles.detailHeader}>
             <View>
-              <Text style={styles.cardTitle}>{selectedTeam.name}</Text>
-              <Text style={styles.teamMeta}>{members.length} member{members.length === 1 ? '' : 's'}</Text>
+              <Text style={[styles.cardTitle, { color: colors.ink }]}>{selectedTeam.name}</Text>
+              <Text style={[styles.teamMeta, { color: colors.muted }]}>
+                {members.length} member{members.length === 1 ? '' : 's'}
+              </Text>
             </View>
             <View style={styles.headerActions}>
-              <Pressable accessibilityLabel="Share invite" onPress={() => shareInvite(selectedTeam)} style={styles.shareButton}>
+              <Pressable
+                accessibilityLabel="Share invite"
+                onPress={() => shareInvite(selectedTeam)}
+                style={[styles.shareButton, { backgroundColor: colors.ink }]}
+              >
                 <Ionicons name="share-outline" size={17} color={colors.white} />
-                <Text style={styles.shareText}>Share</Text>
+                <Text style={[styles.shareText, { color: colors.white }]}>Share</Text>
               </Pressable>
               {selectedTeam.ownerId === user?.uid && (
-                <Pressable accessibilityLabel="Regenerate invite code" onPress={handleRegenerateInvite} style={styles.regenerateButton}>
-                  <Ionicons name="refresh" size={17} color={colors.ink} />
+                <Pressable
+                  accessibilityLabel="Regenerate invite code"
+                  onPress={handleRegenerateInvite}
+                  style={[styles.regenerateButton, { backgroundColor: colors.mint }]}
+                >
+                  <Ionicons name="refresh" size={17} color={colors.mintText} />
                 </Pressable>
               )}
             </View>
           </View>
 
-          <View style={styles.codeBox}>
-            <Text style={styles.codeLabel}>INVITE CODE</Text>
-            <Text style={styles.code}>{selectedTeam.inviteCode}</Text>
+          <View style={[styles.codeBox, { backgroundColor: colors.mint }]}>
+            <Text style={[styles.codeLabel, { color: colors.mintText }]}>INVITE CODE</Text>
+            <Text style={[styles.code, { color: colors.ink }]}>{selectedTeam.inviteCode}</Text>
           </View>
 
           {members.map((member) => (
-            <View key={member.uid} style={styles.memberRow}>
-              <View style={styles.memberAvatar}>
-                <Text style={styles.memberInitial}>{member.displayName?.slice(0, 1).toUpperCase() || '?'}</Text>
+            <View key={member.uid} style={[styles.memberRow, { borderBottomColor: colors.line }]}>
+              <View style={[styles.memberAvatar, { backgroundColor: colors.mint }]}>
+                <Text style={[styles.memberInitial, { color: colors.mintText }]}>
+                  {member.displayName?.slice(0, 1).toUpperCase() || '?'}
+                </Text>
               </View>
-              <Text style={styles.memberName}>{member.displayName || member.uid}</Text>
-              <Text style={styles.role}>{member.role}</Text>
+              <Text style={[styles.memberName, { color: colors.ink }]}>{member.displayName || member.uid}</Text>
+              <Text style={[styles.role, { color: colors.muted }]}>{member.role}</Text>
               {selectedTeam.ownerId === user?.uid && member.uid !== user.uid && (
-                <Pressable accessibilityLabel={`Remove ${member.displayName || 'member'}`} onPress={() => handleRemoveMember(member)}>
+                <Pressable
+                  accessibilityLabel={`Remove ${member.displayName || 'member'}`}
+                  onPress={() => handleRemoveMember(member)}
+                >
                   <Ionicons name="close-circle-outline" size={18} color={colors.danger} />
                 </Pressable>
               )}
             </View>
           ))}
 
-          <Text style={styles.sectionLabel}>SHARED LISTS</Text>
+          <Text style={[styles.sectionLabel, { color: colors.muted }]}>SHARED LISTS</Text>
           <View style={styles.formRow}>
-            <TextInput accessibilityLabel="Shared list name" value={listName} onChangeText={setListName} placeholder="List name" placeholderTextColor="#9BA6A1" style={styles.input} />
-            <Pressable accessibilityLabel="Create shared list" onPress={handleCreateList} disabled={busyAction === 'list'} style={[styles.primaryButton, busyAction === 'list' && styles.disabledButton]}>
-              <Text style={styles.primaryText}>{busyAction === 'list' ? 'Adding...' : 'Add'}</Text>
+            <TextInput
+              accessibilityLabel="Shared list name"
+              value={listName}
+              onChangeText={setListName}
+              placeholder="List name"
+              placeholderTextColor={colors.muted}
+              style={[styles.input, { borderColor: colors.line, color: colors.ink, backgroundColor: colors.paper }]}
+            />
+            <Pressable
+              accessibilityLabel="Create shared list"
+              onPress={handleCreateList}
+              disabled={busyAction === 'list'}
+              style={[styles.primaryButton, { backgroundColor: colors.ink }, busyAction === 'list' && styles.disabledButton]}
+            >
+              <Text style={[styles.primaryText, { color: colors.card }]}>{busyAction === 'list' ? 'Adding...' : 'Add'}</Text>
             </Pressable>
           </View>
 
           {lists.length === 0 ? (
-            <Text style={styles.emptyList}>No shared lists yet.</Text>
+            <Text style={[styles.emptyList, { color: colors.muted }]}>No shared lists yet.</Text>
           ) : (
             lists.map((list) => (
-              <Pressable key={list.id} onPress={() => { setSelectedList(list); cancelSharedEdit(); }} style={[styles.listCard, selectedList?.id === list.id && styles.listCardSelected]}>
+              <Pressable
+                key={list.id}
+                onPress={() => {
+                  setSelectedList(list);
+                  cancelSharedEdit();
+                }}
+                style={[
+                  styles.listCard,
+                  { borderColor: colors.line, backgroundColor: colors.paper },
+                  selectedList?.id === list.id && [styles.listCardSelected, { borderColor: colors.coral }],
+                ]}
+              >
                 <Ionicons name="list-outline" size={18} color={colors.coral} />
-                <Text style={styles.listName}>{list.name}</Text>
-                <Text style={styles.listMeta}>Shared</Text>
+                <Text style={[styles.listName, { color: colors.ink }]}>{list.name}</Text>
+                <Text style={[styles.listMeta, { color: colors.muted }]}>Shared</Text>
               </Pressable>
             ))
           )}
 
           {selectedList && (
             <View style={styles.sharedTasks}>
-              <Text style={styles.sectionLabel}>{selectedList.name.toUpperCase()}</Text>
+              <Text style={[styles.sectionLabel, { color: colors.muted }]}>{selectedList.name.toUpperCase()}</Text>
               <TaskComposer
                 value={taskText}
                 notes={sharedNotes}
@@ -392,74 +513,106 @@ export default function TeamsScreen() {
           )}
 
           {selectedTeam.ownerId !== user?.uid && (
-            <Pressable onPress={handleLeave} disabled={busyAction === 'leave'} style={[styles.leaveButton, busyAction === 'leave' && styles.disabledButton]}>
-              <Text style={styles.leaveText}>{busyAction === 'leave' ? 'Leaving team...' : 'Leave team'}</Text>
+            <Pressable
+              onPress={handleLeave}
+              disabled={busyAction === 'leave'}
+              style={[styles.leaveButton, busyAction === 'leave' && styles.disabledButton]}
+            >
+              <Text style={[styles.leaveText, { color: colors.danger }]}>
+                {busyAction === 'leave' ? 'Leaving team...' : 'Leave team'}
+              </Text>
             </Pressable>
           )}
         </View>
       )}
     </ScrollView>
   );
-
 }
 
 function formatTeamError(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : '';
-  if (message.toLowerCase().includes('permission-denied') || message.toLowerCase().includes('missing or insufficient permissions')) {
+  if (
+    message.toLowerCase().includes('permission-denied') ||
+    message.toLowerCase().includes('missing or insufficient permissions')
+  ) {
     return 'Firebase denied this action. Deploy firestore.rules and firestore.indexes.json, then restart the app.';
   }
   return message || fallback;
 }
 
-function toLocalTask(task: { id: string; title: string; notes: string | null; completed: boolean; reminderAt: Timestamp | null; createdAt: Timestamp }) : Task {
-  return { id: task.id, title: task.title, notes: task.notes ?? null, completed: task.completed, reminderAt: task.reminderAt?.toDate().toISOString() ?? null, notificationId: null, createdAt: task.createdAt?.toMillis() ?? Date.now() };
+function toLocalTask(task: {
+  id: string;
+  title: string;
+  notes: string | null;
+  completed: boolean;
+  reminderAt: Timestamp | null;
+  createdAt: Timestamp;
+}): Task {
+  return {
+    id: task.id,
+    title: task.title,
+    notes: task.notes ?? null,
+    completed: task.completed,
+    reminderAt: task.reminderAt?.toDate().toISOString() ?? null,
+    notificationId: null,
+    createdAt: task.createdAt?.toMillis() ?? Date.now(),
+  };
 }
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, padding: spacing.xl, backgroundColor: colors.paper },
-  eyebrow: { color: colors.coral, fontSize: typography.label, fontWeight: '700', letterSpacing: 1.8 },
-  title: { marginTop: spacing.sm, color: colors.ink, fontSize: 34, fontWeight: '700' },
-  subtitle: { marginTop: spacing.sm, color: colors.muted, fontSize: typography.body },
-  formCard: { marginTop: spacing.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.line, borderRadius: radii.md, backgroundColor: colors.white },
-  cardTitle: { color: colors.ink, fontSize: 15, fontWeight: '700' },
+  container: { flexGrow: 1, padding: spacing.xl },
+  eyebrow: { fontSize: typography.label, fontWeight: '700', letterSpacing: 1.8 },
+  title: { marginTop: spacing.sm, fontSize: 34, fontWeight: '800' },
+  subtitle: { marginTop: spacing.sm, fontSize: typography.body },
+  formCard: { marginTop: spacing.lg, padding: spacing.md, borderWidth: 1, borderRadius: radii.md },
+  cardTitle: { fontSize: 15, fontWeight: '700' },
   formRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
-  input: { flex: 1, height: 46, paddingHorizontal: spacing.md, borderWidth: 1, borderColor: colors.line, borderRadius: radii.sm, color: colors.ink, backgroundColor: colors.paper },
-  primaryButton: { minWidth: 72, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: radii.sm, backgroundColor: colors.ink },
-  primaryText: { color: colors.white, fontSize: typography.caption, fontWeight: '700' },
+  input: { flex: 1, height: 46, paddingHorizontal: spacing.md, borderWidth: 1, borderRadius: radii.sm },
+  primaryButton: { minWidth: 72, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: radii.sm },
+  primaryText: { fontSize: typography.caption, fontWeight: '700' },
   disabledButton: { opacity: 0.65 },
-  deleteTeamButton: { marginTop: spacing.md, paddingVertical: spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderColor: '#F1C8C1', borderRadius: radii.sm, backgroundColor: '#FFF8F6' },
-  deleteTeamText: { color: colors.danger, fontSize: typography.caption, fontWeight: '700' },
-  message: { marginTop: spacing.sm, color: colors.muted, fontSize: typography.caption },
-  sectionLabel: { marginTop: spacing.xl, marginBottom: spacing.sm, color: colors.muted, fontSize: typography.label, fontWeight: '700', letterSpacing: 1.5 },
-  teamCard: { minHeight: 70, marginBottom: spacing.sm, padding: spacing.md, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.line, borderRadius: radii.md, backgroundColor: colors.white },
-  teamCardSelected: { borderColor: colors.coral },
-  teamIcon: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: radii.sm, backgroundColor: '#FBE9E5' },
+  deleteTeamButton: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderRadius: radii.sm,
+  },
+  deleteTeamText: { fontSize: typography.caption, fontWeight: '700' },
+  message: { marginTop: spacing.sm, fontSize: typography.caption },
+  sectionLabel: { marginTop: spacing.xl, marginBottom: spacing.sm, fontSize: typography.label, fontWeight: '700', letterSpacing: 1.5 },
+  teamCard: { minHeight: 70, marginBottom: spacing.sm, padding: spacing.md, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: radii.md },
+  teamCardSelected: {},
+  teamIcon: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: radii.sm },
   teamCopy: { flex: 1, marginHorizontal: spacing.md },
-  teamName: { color: colors.ink, fontSize: typography.body, fontWeight: '700' },
-  teamMeta: { marginTop: 3, color: colors.muted, fontSize: typography.caption },
-  empty: { padding: spacing.xl, alignItems: 'center', borderWidth: 1, borderColor: colors.line, borderRadius: radii.md, backgroundColor: colors.white },
-  emptyTitle: { marginTop: spacing.sm, color: colors.ink, fontSize: 16, fontWeight: '700' },
-  emptyCopy: { marginTop: spacing.xs, color: colors.muted, fontSize: typography.caption, textAlign: 'center' },
-  detailCard: { marginTop: spacing.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.line, borderRadius: radii.md, backgroundColor: colors.white },
+  teamName: { fontSize: typography.body, fontWeight: '700' },
+  teamMeta: { marginTop: 3, fontSize: typography.caption },
+  empty: { padding: spacing.xl, alignItems: 'center', borderWidth: 1, borderRadius: radii.md },
+  emptyTitle: { marginTop: spacing.sm, fontSize: 16, fontWeight: '700' },
+  emptyCopy: { marginTop: spacing.xs, fontSize: typography.caption, textAlign: 'center' },
+  detailCard: { marginTop: spacing.lg, padding: spacing.md, borderWidth: 1, borderRadius: radii.md },
   detailHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  shareButton: { paddingHorizontal: spacing.sm, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radii.sm, backgroundColor: colors.ink },
-  shareText: { color: colors.white, fontSize: typography.label, fontWeight: '700' },
-  regenerateButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: radii.sm, backgroundColor: colors.mint },
-  codeBox: { marginTop: spacing.md, padding: spacing.md, borderRadius: radii.sm, backgroundColor: colors.mint },
-  codeLabel: { color: '#557362', fontSize: typography.label, fontWeight: '700', letterSpacing: 1.2 },
-  code: { marginTop: 4, color: colors.ink, fontSize: 24, fontWeight: '800', letterSpacing: 3 },
-  memberRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.line },
-  memberAvatar: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: radii.pill, backgroundColor: colors.mint },
-  memberInitial: { color: '#557362', fontSize: 12, fontWeight: '800' },
-  memberName: { flex: 1, color: colors.ink, fontSize: typography.caption, fontWeight: '600' },
-  role: { color: colors.muted, fontSize: typography.label, textTransform: 'capitalize' },
+  shareButton: { paddingHorizontal: spacing.sm, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radii.sm },
+  shareText: { fontSize: typography.label, fontWeight: '700' },
+  regenerateButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: radii.sm },
+  codeBox: { marginTop: spacing.md, padding: spacing.md, borderRadius: radii.sm },
+  codeLabel: { fontSize: typography.label, fontWeight: '700', letterSpacing: 1.2 },
+  code: { marginTop: 4, fontSize: 24, fontWeight: '800', letterSpacing: 3 },
+  memberRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderBottomWidth: 1 },
+  memberAvatar: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: radii.pill },
+  memberInitial: { fontSize: 12, fontWeight: '800' },
+  memberName: { flex: 1, fontSize: typography.caption, fontWeight: '600' },
+  role: { fontSize: typography.label, textTransform: 'capitalize' },
   leaveButton: { marginTop: spacing.md, alignItems: 'center', paddingVertical: spacing.sm },
-  leaveText: { color: colors.danger, fontSize: typography.caption, fontWeight: '700' },
-  emptyList: { marginTop: spacing.sm, color: colors.muted, fontSize: typography.caption },
-  listCard: { minHeight: 48, marginTop: spacing.sm, paddingHorizontal: spacing.sm, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.line, borderRadius: radii.sm },
-  listCardSelected: { borderColor: colors.coral },
+  leaveText: { fontSize: typography.caption, fontWeight: '700' },
+  emptyList: { marginTop: spacing.sm, fontSize: typography.caption },
+  listCard: { minHeight: 48, marginTop: spacing.sm, paddingHorizontal: spacing.sm, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderRadius: radii.sm },
+  listCardSelected: {},
   sharedTasks: { marginTop: spacing.md },
-  listName: { flex: 1, color: colors.ink, fontSize: typography.caption, fontWeight: '700' },
-  listMeta: { color: colors.muted, fontSize: typography.label },
+  listName: { flex: 1, fontSize: typography.caption, fontWeight: '700' },
+  listMeta: { fontSize: typography.label },
 });

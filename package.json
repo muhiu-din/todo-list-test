@@ -10,7 +10,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "test:rules": "firebase emulators:exec --only firestore \"vitest run tests/firestore.rules.test.ts\"",
-    "test": "vitest run tests/taskUtils.test.ts",
+    "test": "vitest run tests/taskUtils.test.ts tests/reminderReconciler.test.ts",
     "docker:local": "docker compose up -d --build",
     "docker:local:down": "docker compose down",
     "pipeline:local": "powershell -ExecutionPolicy Bypass -File ./scripts/local-pipeline.ps1"

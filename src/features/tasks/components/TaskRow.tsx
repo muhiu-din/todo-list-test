@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radii, spacing, typography } from '@/src/theme/tokens';
+import { radii, spacing, typography } from '@/src/theme/tokens';
+import { useTheme } from '@/src/theme/ThemeContext';
 import { formatReminder } from '../taskUtils';
 import type { Task } from '../types';
 
@@ -13,38 +14,78 @@ type TaskRowProps = {
 };
 
 export function TaskRow({ task, isEditing, onToggle, onEdit, onDelete }: TaskRowProps) {
+  const { colors, isDark } = useTheme();
+
   return (
-    <View style={[styles.row, task.completed && styles.completedRow, isEditing && styles.editingRow]}>
+    <View
+      style={[
+        styles.row,
+        {
+          borderColor: colors.line,
+          backgroundColor: colors.card,
+        },
+        task.completed && {
+          backgroundColor: isDark ? '#171E1B' : '#FCFDFB',
+          opacity: 0.75,
+        },
+        isEditing && [
+          styles.editingRow,
+          {
+            borderColor: colors.coral,
+            backgroundColor: isDark ? '#2B231E' : '#FFF9F7',
+          },
+        ],
+      ]}
+    >
       <Pressable
         accessibilityLabel={task.completed ? 'Mark task active' : 'Mark task complete'}
         onPress={() => onToggle(task)}
-        style={[styles.check, task.completed && styles.checkDone, isEditing && styles.checkEditing]}
+        style={[
+          styles.check,
+          { borderColor: colors.line },
+          task.completed && { backgroundColor: colors.coral, borderColor: colors.coral },
+          isEditing && { borderColor: colors.coral },
+        ]}
       >
-        {task.completed && <Ionicons name="checkmark" size={15} color={colors.white} />}
+        {task.completed && <Ionicons name="checkmark" size={15} color="#FFFFFF" />}
       </Pressable>
 
       <View style={styles.content}>
         <View style={styles.titleLine}>
-          <Text numberOfLines={2} style={[styles.title, task.completed && styles.titleDone, isEditing && styles.titleEditing]}>
+          <Text
+            numberOfLines={2}
+            style={[
+              styles.title,
+              { color: colors.ink },
+              task.completed && [styles.titleDone, { color: colors.muted }],
+              isEditing && { color: colors.coral },
+            ]}
+          >
             {task.title}
           </Text>
           {isEditing && (
-            <View style={styles.editingTag}>
-              <Text style={styles.editingTagText}>Editing</Text>
+            <View style={[styles.editingTag, { backgroundColor: colors.coralMuted }]}>
+              <Text style={[styles.editingTagText, { color: colors.coral }]}>Editing</Text>
             </View>
           )}
         </View>
 
-        {task.notes && <Text numberOfLines={2} style={styles.notes}>{task.notes}</Text>}
+        {task.notes && (
+          <Text numberOfLines={2} style={[styles.notes, { color: colors.muted }]}>
+            {task.notes}
+          </Text>
+        )}
 
         <View style={styles.metaRow}>
           {task.reminderAt ? (
-            <View style={styles.reminderBadge}>
+            <View style={[styles.reminderBadge, { backgroundColor: colors.coralMuted }]}>
               <Ionicons name="alarm-outline" size={12} color={colors.coral} />
-              <Text style={styles.reminderMeta}>{formatReminder(task.reminderAt)}</Text>
+              <Text style={[styles.reminderMeta, { color: colors.coral }]}>
+                {formatReminder(task.reminderAt)}
+              </Text>
             </View>
           ) : (
-            <Text style={styles.meta}>Added today</Text>
+            <Text style={[styles.meta, { color: colors.muted }]}>Added today</Text>
           )}
         </View>
       </View>
@@ -54,7 +95,10 @@ export function TaskRow({ task, isEditing, onToggle, onEdit, onDelete }: TaskRow
           accessibilityLabel={`Edit ${task.title}`}
           hitSlop={8}
           onPress={() => onEdit(task)}
-          style={[styles.iconButton, isEditing && styles.iconButtonActive]}
+          style={[
+            styles.iconButton,
+            isEditing && [styles.iconButtonActive, { backgroundColor: colors.coralMuted }],
+          ]}
         >
           <Ionicons name="pencil" size={17} color={isEditing ? colors.coral : colors.muted} />
         </Pressable>
@@ -72,26 +116,89 @@ export function TaskRow({ task, isEditing, onToggle, onEdit, onDelete }: TaskRow
 }
 
 const styles = StyleSheet.create({
-  row: { minHeight: 68, marginBottom: spacing.sm, padding: spacing.sm, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: colors.line, borderRadius: radii.md, backgroundColor: colors.white },
-  completedRow: { backgroundColor: '#FCFDFB' },
-  editingRow: { borderColor: colors.coral, backgroundColor: '#FFF9F7', borderWidth: 1.5 },
-  check: { width: 24, height: 24, borderRadius: radii.pill, borderWidth: 1.5, borderColor: '#C3D0C8', alignItems: 'center', justifyContent: 'center' },
-  checkDone: { backgroundColor: colors.coral, borderColor: colors.coral },
-  checkEditing: { borderColor: colors.coral },
-  content: { flex: 1, minWidth: 0 },
-  titleLine: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  title: { color: colors.ink, fontSize: typography.body, fontWeight: '600', flexShrink: 1 },
-  titleDone: { color: '#9CA8A2', textDecorationLine: 'line-through' },
-  titleEditing: { color: colors.coral },
-  editingTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: radii.pill, backgroundColor: '#FDEAE6' },
-  editingTagText: { color: colors.coral, fontSize: 10, fontWeight: '800' },
-  notes: { marginTop: 3, color: colors.muted, fontSize: 12 },
-  metaRow: { marginTop: spacing.xs, flexDirection: 'row', alignItems: 'center' },
-  meta: { color: '#A2ADA8', fontSize: typography.label },
-  reminderBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FBE9E5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: radii.sm },
-  reminderMeta: { color: colors.coral, fontSize: typography.label, fontWeight: '700' },
-  actions: { flexDirection: 'row', gap: spacing.xs },
-  iconButton: { width: 32, height: 40, alignItems: 'center', justifyContent: 'center' },
-  iconButtonActive: { backgroundColor: '#FDEAE6', borderRadius: radii.sm },
+  row: {
+    minHeight: 68,
+    marginBottom: spacing.sm,
+    padding: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: radii.md,
+  },
+  editingRow: {
+    borderWidth: 1.5,
+  },
+  check: {
+    width: 24,
+    height: 24,
+    borderRadius: radii.pill,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  content: {
+    flex: 1,
+    minWidth: 0,
+  },
+  titleLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  title: {
+    fontSize: typography.body,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  titleDone: {
+    textDecorationLine: 'line-through',
+  },
+  editingTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radii.pill,
+  },
+  editingTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  notes: {
+    marginTop: 3,
+    fontSize: 12,
+  },
+  metaRow: {
+    marginTop: spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  meta: {
+    fontSize: typography.label,
+  },
+  reminderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radii.sm,
+  },
+  reminderMeta: {
+    fontSize: typography.label,
+    fontWeight: '700',
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  iconButton: {
+    width: 32,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconButtonActive: {
+    borderRadius: radii.sm,
+  },
 });
-
